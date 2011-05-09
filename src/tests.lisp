@@ -14,9 +14,6 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-(load "myfitnessdata.lisp")
-(ql:quickload '("lisp-unit"))
-
 (in-package :myfitnessdata)
 
 (defmacro run-tests-and-quit (&body tests)
@@ -56,11 +53,11 @@
 (lisp-unit:define-test 
  make-csv-from-list
  (let ((list '(("1/1/2000" "79.2") ("2/1/2000" "23.4"))))
-   (lisp-unit:assert-equal (format nil "1/1/2000,79.2~%2/1/2000,23.4~%")
+   (lisp-unit:assert-equal (format nil "1/1/2000,79.2~%2/1/2000,23.4")
 			   (make-csv list))))
 
 (lisp-unit:define-test 
  make-csv-from-list-is-sorted
  (let ((list '(("2/1/2000" "23.4") ("1/1/2000" "79.2"))))
-   (lisp-unit:assert-equal (format nil "1/1/2000,79.2~%2/1/2000,23.4~%")
+   (lisp-unit:assert-equal (format nil "1/1/2000,79.2~%2/1/2000,23.4")
 			   (make-csv list))))

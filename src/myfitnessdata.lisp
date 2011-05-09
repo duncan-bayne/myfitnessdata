@@ -16,39 +16,31 @@
 
 
 (defpackage :myfitnessdata
-  (:use :common-lisp)
+  (:use :common-lisp :drakma)
   (:export #:main))
 
 (in-package :myfitnessdata)
 
-(require :sb-posix)
-(load (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))
-(ql:quickload '("drakma" 
-		"closure-html" 
-		"cxml-stp" 
-		"net-telent-date"))
-
-(defun show-usage () 
-  (format t "MyFitnessData - a CSV web scraper for the MyFitnessPal website.~%")
-  (format t "Copyright (C) 2011 \"Duncan Bayne\" <dhgbayne@gmail.com>~%~%")
-  (format t "This program is distributed in the hope that it will be useful,~%")
-  (format t "but WITHOUT ANY WARRANTY; without even the implied warranty of~%")
-  (format t "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the~%")
-  (format t "GNU Lesser General Public License for more details.~%~%")
-  (format t "Usage: myfitnessdata USERNAME PASSWORD WEIGHTS_FILENAME~%~%")
-  (format t "  USERNAME  Your MyFitnessPal username~%")
-  (format t "  PASSWORD  Your MyFitnessPal password~%")
-  (format t "  FILENAME  The pathname of the CSV file to write~%~%")
-  (format t "Example:~%~%")
-  (format t "  myfitnessdata bob b0bsp4ss! c:\\Users\\bob\\weights.csv~%~%")
-  (format t "This will log into the MyFitnessPal site with the username 'bob' and the~%")
-  (format t "password 'b0bsp4ss!'.  It will then scrape weight data into the file~%")
-  (format t "'c:\\Users\\bob\\weights.csv', overwriting it if it exists.~%"))
+(defvar help (list "MyFitnessData - a CSV web scraper for the MyFitnessPal website."
+		   "Copyright (C) 2011 \"Duncan Bayne\" <dhgbayne@gmail.com>"
+		   "This program is distributed in the hope that it will be useful,"
+		   "but WITHOUT ANY WARRANTY; without even the implied warranty of"
+		   "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the"
+		   "GNU Lesser General Public License for more details."
+		   "Usage: myfitnessdata USERNAME PASSWORD WEIGHTS_FILENAME"
+		   "  USERNAME  Your MyFitnessPal username"
+		   "  PASSWORD  Your MyFitnessPal password"
+		   "  FILENAME  The pathname of the CSV file to write"
+		   "Example:"
+		   "  myfitnessdata bob b0bsp4ss! c:\\Users\\bob\\weights.csv"
+		   "This will log into the MyFitnessPal site with the username 'bob' and the"
+		   "password 'b0bsp4ss!'.  It will then scrape weight data into the file"
+		   "'c:\\Users\\bob\\weights.csv', overwriting it if it exists."))
 
 (defun login (username password)
   "Logs in to www.myfitnesspal.com.  Returns a cookie-jar containing authentication details."
-  (let ((cookie-jar (make-instance 'drakma:cookie-jar)))
-    (drakma:http-request "http://www.myfitnesspal.com/account/login"
+  (let ((cookie-jar (make-instance 'cookie-jar)))
+    (http-request "http://www.myfitnesspal.com/account/login"
 			 :method :post
 			 :parameters `(("username" . ,username) ("password" . ,password))
 			 :cookie-jar cookie-jar)
@@ -56,36 +48,33 @@
 
 (defun logged-in? (cookie-jar)	     
   "Returns true if a cookie-jar contains login information for www.myfitnesspal.com, and nil otherwise."
-  (let ((logged-in? nil))
-    (loop for cookie in (drakma:cookie-jar-cookies cookie-jar) do
-	  (if (and (equal (drakma:cookie-name cookie) "known_user")
-		   (equal (drakma:cookie-domain cookie) "www.myfitnesspal.com")
-		   (drakma:cookie-value cookie))
-	      (setq logged-in? t)))
-    logged-in?))
+  (let ((cookies (cookie-jar-cookies cookie-jar)))
+    (and cookies
+	 (loop for c in cookies
+	       always (and (equal (cookie-name c) "known_user")
+			   (equal (cookie-domain c) "www.myfitnesspal.com")
+			   (cookie-value c))))))
 
 (defun get-page (page-num cookie-jar)
   "Downloads a potentially invalid HTML page containing data to scrape.  Returns a string containing the HTML."
-  (let ((url (concatenate 'string "http://www.myfitnesspal.com/measurements/edit?type=1&page=" (write-to-string page-num))))
-    (let ((body (drakma:http-request url :cookie-jar cookie-jar)))
-      (if (search "No measurements found." body)
-	  nil
-	body))))
+  (let* ((url (format nil "http://www.myfitnesspal.com/measurements/edit?type=1&page=~D" page-num))
+	 (body (http-request url :cookie-jar cookie-jar)))
+      (unless (search "No measurements found." body) body)))
 
 (defun scrape-body (body)
   "Scrapes data from a potentially invalid HTML document, returning a list of lists of values."
-  (let ((valid-xhtml (chtml:parse body (cxml:make-string-sink))))
-    (let ((xhtml-tree (chtml:parse valid-xhtml (cxml-stp:make-builder))))
-      (scrape-xhtml xhtml-tree))))
+  (let ((valid-xhtml (chtml:parse body (cxml:make-string-sink)))
+	(xhtml-tree (chtml:parse valid-xhtml (cxml-stp:make-builder))))
+    (scrape-xhtml xhtml-tree)))
 
 (defun scrape-xhtml (xhtml-tree)
   "Scrapes data from an XHTML tree, returning a list of lists of values."
   (let ((results nil))
     (stp:do-recursively (element xhtml-tree)
-			(when (and (typep element 'stp:element)
-				   (equal (stp:local-name element) "tr"))
-			  (if (scrape-row element)
-			      (setq results (append results (list (scrape-row element)))))))
+      (when (and (typep element 'stp:element)
+		 (equal (stp:local-name element) "tr"))
+	(if (scrape-row element)
+	    (setq results (append results (list (scrape-row element)))))))
     results))
 
 (defun scrape-row (row)
@@ -97,37 +86,31 @@
 	(if (not (equal measurement-type "Measurement"))
 	    (list measurement-date measurement-value)))))
 
-(defun nth-child-data (number row)
+(defun nth-child-data (number row) 
   (stp:data (stp:nth-child 0 (stp:nth-child number row))))
 
-(defun recursive-scrape-page (page-num cookie-jar)
-  "Recursively scrapes data from a page and all successive pages.  Returns a list of lists of values."
-  (let ((body (get-page page-num cookie-jar)))
-    (if body
-	(append (scrape-body body)
-		(recursive-scrape-page (+ 1 page-num) cookie-jar)))))
+(defun scrape-page (page-num cookie-jar)
+  "Iteratively scrapes data from a page and all successive pages.  Returns a list of lists of values."
+  (loop for i from page-num
+	if (get-page i cookie-jar) collect it into pg
+	  else return pg))
 
 (defun show-login-failure ()
   (format t "Login failed.~%"))
 
 (defun write-csv (data csv-pathname)
   "Takes a list of lists of values, converts them to CSV, and writes them to a file."
+  (ensure-directories-exist csv-pathname)
   (with-open-file (stream csv-pathname 
 			  :direction :output
 			  :if-exists :overwrite
 			  :if-does-not-exist :create)
-		  (format stream (make-csv data))))
-
-(defun separate-values (value-list)
-  "Takes a list of values, and returns a string containing a CSV row that represents the values."
-  (format nil "~{~A~^,~}" value-list))
+    (format stream (make-csv data))))
 
 (defun make-csv (list)
   "Takes a list of lists of values, and returns a string containing a CSV file representing each top-level list as a row."
-  (let ((csv "")
-	(sorted-list (sort list #'first-column-as-date-ascending)))
-    (mapcar (lambda (row) (setq csv (concatenate 'string csv (separate-values row) (format nil "~%")))) sorted-list)
-    csv))
+  (let ((sorted-list (sort (copy-list list) #'first-column-as-date-ascending)))
+    (format nil "~{~{~A~^,~}~^~%~}" sorted-list)))
 
 (defun first-column-as-date-ascending (first-row second-row)
   "Compares two rows by their first column, which is parsed as a time."
@@ -138,15 +121,13 @@
   "Attempts to log in, and if successful scrapes all data to the file specified by csv-pathname."
   (let ((cookie-jar (login username password)))
     (if (logged-in? cookie-jar)
-	(write-csv (recursive-scrape-page 1 cookie-jar) csv-pathname)
+	(write-csv (scrape-page 1 cookie-jar) csv-pathname)
       (show-login-failure))))
 
 (defun main (args)
   "The entry point for the application when compiled with buildapp."
   (if (= (length args) 4)
-      (let ((username (nth 1 args))
-	    (password (nth 2 args))
-	    (csv-pathname (nth 3 args)))
+      (destructuring-bind (i username password csv-pathname) args
 	(scrape username password csv-pathname))
-    (show-usage)))
+      (format t "~{~a~%~}" help)))
 
