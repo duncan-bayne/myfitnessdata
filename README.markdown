@@ -4,9 +4,7 @@ myfitnessdata is an application to extract diet progress data from the [MyFitnes
 
 status
 ------
-I have released MyFitnessData 1.1; release notes are available on [the wiki](https://github.com/duncan-bayne/myfitnessdata/wiki).  This version is currently broken as a result of website changes at MyFitnessPal.
-
-[MyFitnessData 2.0](https://github.com/duncan-bayne/myfitnessdata/tree/2.0) is under development.  It will feature several major improvements including a GUI written with [mcclim](http://common-lisp.net/project/mcclim/).
+MyFitnessData is no longer under active development.  I suggest taking a look at [this browser plugin](http://community.myfitnesspal.com/en/discussion/1155895/data-export-net-carbs-calorie-breakdown-pie-chart-and-more) instead.
 
 licence
 -------
