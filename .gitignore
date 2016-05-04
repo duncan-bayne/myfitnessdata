@@ -1,8 +1,0 @@
-utils/buildapp.tgz
-utils/quicklisp.lisp
-bin
-bin/myfitnessdata
-bin/myfitnessdata.exe
-win32/MyFitnessData-*.exe
-src/dumper-*.lisp
-
